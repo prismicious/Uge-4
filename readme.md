@@ -10,21 +10,6 @@ This project is a **PDF Report Downloader** that automates the process of downlo
 - Logs download statuses and updates a CSV file with the results.
 - Supports concurrent downloads for improved performance.
 
-## Project Structure
-
-Uge 4/  
-├── models/  
-│   ├── Downloader.py       # Handles downloading of PDF reports  
-│   ├── PDClient.py         # Parses Excel files and manages report data  
-│   ├── report.py           # Defines the PDFReport class for report objects  
-├── utils/  
-│   ├── utils.py            # Utility functions (e.g., append_to_csv)  
-│   ├── logger.py           # Logger for logging messages  
-├── downloads/              # Folder where downloaded PDFs are saved  
-├── output/                 # Folder for output files (e.g., status logs)  
-├── main.py                 # Entry point for the program  
-├── readme.md               # Project documentation  
-
 ## Requirements
 
 - Python 3.8 or higher
@@ -86,3 +71,20 @@ The UML diagram below illustrates the structure of the project and the relations
 - **Main**: The entry point of the program. It orchestrates the workflow by initializing the `PDClient` and `Downloader` and running the download process.
 
 ![UML Diagram](./uml_diagram.png)
+
+## Project Structure
+
+```bash
+Uge 4/  
+├── models/  
+│   ├── Downloader.py       # Handles downloading of PDF reports  
+│   ├── PDClient.py         # Parses Excel files and manages report data  
+│   ├── report.py           # Defines the PDFReport class for report objects  
+├── utils/  
+│   ├── utils.py            # Utility functions (e.g., append_to_csv)  
+│   ├── logger.py           # Logger for logging messages  
+├── downloads/              # Folder where downloaded PDFs are saved  
+├── output/                 # Folder for output files (e.g., status logs)  
+├── main.py                 # Entry point for the program  
+├── readme.md               # Project documentation  
+```
