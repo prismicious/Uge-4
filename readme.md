@@ -70,7 +70,7 @@ The UML diagram below illustrates the structure of the project and the relations
 - **Utils**: Provides utility functions such as appending data to CSV files and creating folders if they don't exist.
 - **Main**: The entry point of the program. It orchestrates the workflow by initializing the `PDClient` and `Downloader` and running the download process.
 
-![UML Diagram](./uml_diagram.png_new)
+![UML Diagram](./uml_diagram_new.png)
 
 ## Project Structure
                                                                     
