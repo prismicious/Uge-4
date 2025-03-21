@@ -10,11 +10,15 @@ from tqdm import tqdm
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import logging
+from requests.exceptions import SSLError
+import urllib3
+import sys
 
 from utils.utils import append_to_csv
 
 urllib3_logger = logging.getLogger("urllib3")
 urllib3_logger.setLevel(logging.ERROR)
+
 
 class Downloader:
     """
@@ -48,6 +52,8 @@ class Downloader:
         self.download_folder = "downloads"
         self.output_folder = "output"
         self.results = {}
+        self.successful_downloads = 0
+        self.failed_downloads = 0
 
         # Create a session with retry logic
         self.session = requests.Session()
@@ -63,6 +69,9 @@ class Downloader:
         adapter = HTTPAdapter(max_retries=retries)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
+
+        # Suppress InsecureRequestWarning warnings
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def log_status_count(self, result: str | int) -> None:
         """
@@ -90,32 +99,41 @@ class Downloader:
 
         append_to_csv(f"{self.output_folder}/{self.log_file}", data, 'w')
 
-    def set_reports(self, pdf_reports: List[PDFReport]):
+    def set_reports(self, pdf_reports: List[PDFReport]) -> None:
         self.pdf_reports = pdf_reports
 
         logger.info(f"Set {len(pdf_reports)} reports to download")
 
-    def download_report(self, report: PDFReport) -> None:
+    def handle_download_exception(self, report: PDFReport, exception: Exception, result: str) -> None:
         """
-        Downloads a single report.
-        It tries the primary URL first, then the backup URL if available.
-        If the download is successful, it updates the status in the CSV file.
+        Handles exceptions during the download process by logging and updating the report status.
+
+        Arguments:
+            report (PDFReport): The report being downloaded.
+            exception (Exception): The exception that occurred.
+            result (str): The result to log (e.g., status code or exception type).
+        """
+        self.log_status_count(result)
+        self.pdclient.update_status(report.brnum, False, result)
+        self.failed_downloads += 1
+
+    def download_report(self, report: PDFReport, verify_ssl: bool = True, retries_left: int = 3) -> None:
+        """
+        Downloads a single report with retry logic and exception handling.
 
         Arguments:
             report (PDFReport): The PDFReport object containing the report's URLs and metadata.
-
-        Raises:
-            requests.HTTPError: If the HTTP request fails.
-            ValueError: If the response content type is not "application/pdf".
+            verify_ssl (bool): Whether to verify SSL certificates. Default is True.
+            retries_left (int): Number of retries left for the download. Default is 3.
         """
         urls_to_try = [report.pdf_url, report.backup_url] if report.backup_url else [
             report.pdf_url]
 
         for url in urls_to_try:
+            response = None  # Initialize response to None
             try:
-                response = None
                 # Use the session with retry logic
-                with self.session.get(url, timeout=10, stream=True) as response:
+                with self.session.get(url, timeout=10, stream=True, verify=verify_ssl) as response:
                     response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
 
                     # Check if the response is a PDF
@@ -127,25 +145,47 @@ class Downloader:
                     filename = os.path.join(
                         self.download_folder, f"{report.brnum}.pdf")
                     with open(filename, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=1024):
+                        for chunk in response.iter_content(chunk_size=8124):
                             f.write(chunk)
-                            break
 
                     if os.path.exists(filename) and os.path.getsize(filename) > 0:
                         self.pdclient.update_status(
                             report.brnum, True, response.status_code)
+                        self.successful_downloads += 1
                         return
 
-            except Exception as e:
-                if not response:
-                    exception_type = type(e).__name__
-                    self.log_status_count(exception_type)
-                
+            except SSLError as e:
+                # Retry with SSL verification turned off
+                if verify_ssl:
+                    self.download_report(
+                        report, verify_ssl=False, retries_left=retries_left)
+                    return
                 else:
-                    self.log_status_count(response.status_code)
-                    self.pdclient.update_status(report.brnum, False, "N/A")
+                    self.handle_download_exception(report, e, "SSL Error")
 
-    def download(self):
+            except requests.HTTPError as e:
+                # Check if response exists and handle accordingly
+                if response is None:
+                    status_code = "N/A"
+                else:
+                    status_code = response.status_code
+
+                self.handle_download_exception(report, e, status_code)
+
+            except ValueError as e:
+                self.handle_download_exception(
+                    report, e, "Invalid Content-Type")
+
+            except Exception as e:
+                exception_type = type(e).__name__
+                self.handle_download_exception(report, e, exception_type)
+
+        # Retry logic for transient errors
+        if retries_left > 0:
+            self.download_report(report, verify_ssl=verify_ssl,
+                                 retries_left=retries_left - 1)
+
+    def download(self) -> None:
         """
         Downloads all the reports using a thread pool for concurrency.
 
@@ -156,10 +196,17 @@ class Downloader:
             futures = [executor.submit(self.download_report, report)
                        for report in self.pdf_reports]
 
-            # Wrap the futures list with tqdm for consistent progress updates
-            for future in tqdm(futures, total=len(futures)):
-                try:
-                    # Wait for the future to complete
-                    future.result()
-                except Exception as e:
-                    logger.error(f"Failed to download report because {e}")
+            # Create a single tqdm progress bar with a custom description
+            with tqdm(total=len(futures), desc="Downloading PDFs", unit="pdf", file=sys.stderr) as progress_bar:
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        # Wait for the future to complete
+                        future.result()
+                    
+                    except Exception as e:
+                        logger.error(f"Failed to download report because {e}")
+                    finally:
+                        # Update the progress bar after each task completes
+                        progress_bar.update(1)
+
+        logger.info(f"Sucessful downloads: {self.successful_downloads} | Failed downloads: {self.failed_downloads}")

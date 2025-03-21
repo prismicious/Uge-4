@@ -1,3 +1,4 @@
+import os
 from models.Downloader import Downloader
 from models.PDClient import PDClient
 from utils.logger import logger
@@ -23,10 +24,14 @@ class Main:
     """
     def __init__(self):
         self.parser = PDClient("GRI_2017_2020")
-        self.downloader = Downloader(num_workers=100)
+        self.cpu_cores = os.cpu_count()
+        # Limit the number of workers to between cpu_cores * 4 and 100
+        self.num_workers = min(self.cpu_cores * 4, 100)
+        # Use the number of CPU cores as the number of workers
+        self.downloader = Downloader(self.num_workers)
         
         
-    def run(self):
+    def run(self) -> None:
         for folder in ["downloads", "output"]:
             create_folder_if_not_exists(folder)
         

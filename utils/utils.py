@@ -2,7 +2,7 @@ import os
 import csv
 from typing import Dict, List, Union
 
-def append_to_csv(file_path: str, data: Union[Dict, List[Dict]], mode='a'):
+def append_to_csv(file_path: str, data: Union[Dict, List[Dict]], mode='a') -> None:
     """
     Appends data to a CSV file. If the file is empty or in 'w' mode, it writes the headers.
 
@@ -45,6 +45,6 @@ def append_to_csv(file_path: str, data: Union[Dict, List[Dict]], mode='a'):
         else:
             raise ValueError("Data must be a dictionary or a list of dictionaries.")
         
-def create_folder_if_not_exists(folder_name: str):
+def create_folder_if_not_exists(folder_name: str) -> None:
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)

@@ -1,5 +1,6 @@
 import json
 import os
+from typing import List
 import pandas as pd
 from utils.logger import logger
 from models.Report import PDFReport
@@ -41,7 +42,7 @@ class PDClient:
         self.df = pd.read_excel(
             f"{self.folder_path}/{self.file_name}.xlsx", index_col=self.id)
 
-    def parse_excel_to_reports(self):
+    def parse_excel_to_reports(self) -> List[PDFReport]:
         reports = []
         df = self.df
 
@@ -58,7 +59,7 @@ class PDClient:
             f"Succesfully parsed all reports from {self.file_name}.xlsx")
         return reports
 
-    def update_status(self, brnum, downloaded, status_code):
+    def update_status(self, brnum, downloaded, status_code) -> None:
         # Convert the boolean `downloaded` to "Yes" or "No"
         status = "Yes" if downloaded else "No"
 
