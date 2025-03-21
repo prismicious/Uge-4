@@ -17,6 +17,8 @@ This project is a **PDF Report Downloader** that automates the process of downlo
   - `pandas`
   - `requests`
   - `urllib3`
+  - `tqdm`
+  - `openpyxl` 
 
 ## Installation
 
