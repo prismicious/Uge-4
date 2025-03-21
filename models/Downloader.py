@@ -117,17 +117,15 @@ class Downloader:
         self.pdclient.update_status(report.brnum, False, result)
         self.failed_downloads += 1
 
-    def download_report(self, report: PDFReport, verify_ssl: bool = True, retries_left: int = 3) -> None:
+    def download_report(self, report: PDFReport, verify_ssl: bool = True) -> None:
         """
         Downloads a single report with retry logic and exception handling.
 
         Arguments:
             report (PDFReport): The PDFReport object containing the report's URLs and metadata.
             verify_ssl (bool): Whether to verify SSL certificates. Default is True.
-            retries_left (int): Number of retries left for the download. Default is 3.
         """
-        urls_to_try = [report.pdf_url, report.backup_url] if report.backup_url else [
-            report.pdf_url]
+        urls_to_try = [report.pdf_url, report.backup_url] if report.backup_url else [report.pdf_url]
 
         for url in urls_to_try:
             response = None  # Initialize response to None
@@ -138,27 +136,24 @@ class Downloader:
 
                     # Check if the response is a PDF
                     if response.headers.get("Content-Type") != "application/pdf":
-                        raise ValueError(
-                            f"Unexpected Content-Type for {url}: {response.headers.get('Content-Type')}")
+                        raise ValueError(f"Unexpected Content-Type for {url}: {response.headers.get('Content-Type')}")
 
                     # Save the file
-                    filename = os.path.join(
-                        self.download_folder, f"{report.brnum}.pdf")
+                    filename = os.path.join(self.download_folder, f"{report.brnum}.pdf")
                     with open(filename, "wb") as f:
                         for chunk in response.iter_content(chunk_size=8124):
                             f.write(chunk)
 
                     if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                        self.pdclient.update_status(
-                            report.brnum, True, response.status_code)
+                        self.pdclient.update_status(report.brnum, True, response.status_code)
                         self.successful_downloads += 1
                         return
 
             except SSLError as e:
                 # Retry with SSL verification turned off
                 if verify_ssl:
-                    self.download_report(
-                        report, verify_ssl=False, retries_left=retries_left)
+                    logger.warning(f"Retrying {url} with SSL verification disabled due to SSL error.")
+                    self.download_report(report, verify_ssl=False)
                     return
                 else:
                     self.handle_download_exception(report, e, "SSL Error")
@@ -173,17 +168,11 @@ class Downloader:
                 self.handle_download_exception(report, e, status_code)
 
             except ValueError as e:
-                self.handle_download_exception(
-                    report, e, "Invalid Content-Type")
+                self.handle_download_exception(report, e, "Invalid Content-Type")
 
             except Exception as e:
                 exception_type = type(e).__name__
                 self.handle_download_exception(report, e, exception_type)
-
-        # Retry logic for transient errors
-        if retries_left > 0:
-            self.download_report(report, verify_ssl=verify_ssl,
-                                 retries_left=retries_left - 1)
 
     def download(self) -> None:
         """
